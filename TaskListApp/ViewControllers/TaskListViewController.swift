@@ -8,6 +8,7 @@
 import UIKit
 
 final class TaskListViewController: UITableViewController {
+    private let storageManager = StorageManager.shared
     private var taskList: [ToDoTask] = []
     private let cellID = "task"
     
@@ -20,45 +21,60 @@ final class TaskListViewController: UITableViewController {
     }
     
     @objc private func addNewTask() {
-        showAlert(withTitle: "New Task", andMessage: "What do you want to do&")
+        showAlert(withTitle: "New Task", andMessage: "What do you want to do?")
     }
     
     private func fetchData() {
-        let appDelegate = UIApplication.shared.delegate as! AppDelegate
         let fetchRequest = ToDoTask.fetchRequest()
         
         do {
-           taskList = try appDelegate.persistentContainer.viewContext.fetch(fetchRequest)
+           taskList = try storageManager.persistentContainer.viewContext.fetch(fetchRequest)
         } catch {
             print(error)
         }
     }
     
-    private func showAlert(withTitle title: String, andMessage message: String) {
+    private func showAlert(withTitle title: String, andMessage message: String, for taskNumber: Int? = nil) {
         let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        
         let saveAction = UIAlertAction(title: "Save Task", style: .default) { [unowned self] _ in
             guard let taskName = alert.textFields?.first?.text, !taskName.isEmpty else { return }
-            save(taskName)
+            if let taskNumber {
+                update(taskNumber: taskNumber, to: taskName)
+            } else {
+                save(taskName)
+            }
         }
+        
         let cancelAction = UIAlertAction(title: "Cancel", style: .destructive)
+    
         alert.addAction(saveAction)
         alert.addAction(cancelAction)
         alert.addTextField { textField in
-            textField.placeholder = "New Task"
+            if let taskNumber {
+                textField.text = self.taskList[taskNumber].title
+            } else {
+                textField.placeholder = "New Task"
+            }
         }
         present(alert, animated: true)
     }
     
     private func save(_ taskName: String) {
-        let appDelegate = UIApplication.shared.delegate as! AppDelegate
-        let task = ToDoTask(context: appDelegate.persistentContainer.viewContext)
+        let task = ToDoTask(context: storageManager.persistentContainer.viewContext)
         task.title = taskName
         taskList.append(task)
         
         let indexPath = IndexPath(row: taskList.count - 1, section: 0)
         tableView.insertRows(at: [indexPath], with: .automatic)
         
-        appDelegate.saveContext()
+        storageManager.saveContext()
+    }
+    
+    private func update(taskNumber: Int, to newName: String) {
+        taskList[taskNumber].title = newName
+        storageManager.saveContext()
+        tableView.reloadData()
     }
 }
 
@@ -75,6 +91,14 @@ extension TaskListViewController {
         content.text = toDoTask.title
         cell.contentConfiguration = content
         return cell
+    }
+    
+    override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        showAlert(
+            withTitle: taskList[indexPath.row].title ?? "",
+            andMessage: "What do you want to do?",
+            for: indexPath.row
+        )
     }
 }
 
